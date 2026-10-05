@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Envelope Explorer — Amp & Filter</title>
+<style>
+  :root{
+    --bg:#0c111b;
+    --panel:#131b29;
+    --panel2:#182235;
+    --text:#f2f6ff;
+    --muted:#9cadc7;
+    --line:#6ea8ff;
+    --accent:#8ce99a;
+    --warm:#ffd166;
+    --danger:#ff7b7b;
+    --grid:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:linear-gradient(180deg,#09101a,#0f1725);
+    color:var(--text);
+    min-height:100vh;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px}
+  h1{font-size:clamp(28px,4vw,46px);margin:0 0 8px;letter-spacing:-.03em}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:16px}
+  .tabs{display:flex;gap:10px;margin-bottom:18px}
+  button{
+    border:0;border-radius:12px;padding:12px 16px;
+    font:inherit;font-weight:700;cursor:pointer;
+    color:var(--text);background:#243149;
+    transition:.18s transform,.18s background,.18s opacity;
+  }
+  button:hover{transform:translateY(-1px);background:#2c3c59}
+  button.active{background:#3a67d8}
+  .tabPanel{display:none}
+  .tabPanel.active{display:block}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:18px}
+  .card{
+    background:rgba(19,27,41,.94);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:18px;padding:18px;
+    box-shadow:0 14px 35px rgba(0,0,0,.22)
+  }
+  .card h2{margin:0 0 6px;font-size:22px}
+  .card h3{margin:0 0 12px;font-size:16px;color:#dce7ff}
+  .hint{font-size:13px;color:var(--muted);line-height:1.45}
+  .instrumentGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .inst{min-height:74px;text-align:left}
+  .inst b{display:block;font-size:15px}
+  .inst span{display:block;font-size:12px;color:#b9c7dc;margin-top:4px;font-weight:500}
+  .inst.selected{outline:2px solid var(--accent);background:#254132}
+  .controls{display:grid;gap:14px;margin-top:16px}
+  .ctrl label{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#d6e0ef}
+  input[type=range]{width:100%;accent-color:#7aa2ff}
+  .transport{display:flex;gap:10px;margin-top:16px}
+  .play{background:#2f8f5b;flex:1}
+  .stop{background:#6d3940}
+  .canvasWrap{
+    position:relative;
+    min-height:420px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  canvas{
+    width:100%;
+    height:390px;
+    border-radius:14px;
+    background:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+      #0d1421;
+    background-size:50px 50px;
+  }
+  .legend{
+    display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;
+    color:var(--muted);font-size:12px
+  }
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+  .readout{
+    margin-top:12px;padding:12px 14px;border-radius:12px;background:#0c1320;
+    display:flex;justify-content:space-between;gap:12px;align-items:center
+  }
+  .readout strong{font-size:24px}
+  .badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:92px;padding:7px 10px;border-radius:999px;
+    background:#273751;color:#dbe8ff;font-weight:800;font-size:12px
+  }
+  .explain{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px
+  }
+  .phase{
+    background:#111a29;border:1px solid rgba(255,255,255,.07);
+    border-radius:12px;padding:11px
+  }
+  .phase b{display:block;margin-bottom:4px}
+  .phase span{font-size:12px;color:var(--muted);line-height:1.35}
+  .filterPresets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+  .filterPresets button.selected{outline:2px solid var(--warm);background:#55461e}
+  .bigSlider{margin-top:18px}
+  .bigSlider input{height:34px}
+  .meter{
+    height:12px;border-radius:999px;background:#0a0e16;overflow:hidden;margin-top:8px
+  }
+  .meter > div{height:100%;width:0;background:linear-gradient(90deg,#69db7c,#ffd43b,#ff8787)}
+  .footerNote{margin-top:18px;color:#7f91ad;font-size:12px}
+  @media(max-width:850px){
+    .grid{grid-template-columns:1fr}
+    .canvasWrap{min-height:330px}
+    canvas{height:320px}
+    .explain{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Envelope Explorer</h1>
+  <p class="sub">Hear what an envelope does while you watch it happen.</p>
+
+  <div class="tabs">
+    <button id="ampTab" class="active">AMP ENVELOPE</button>
+    <button id="filterTab">FILTER ENVELOPE</button>
+  </div>
+
+  <section id="ampPanel" class="tabPanel active">
+    <div class="grid">
+      <div class="card">
+        <h2>Amp Envelope</h2>
+        <p class="hint">The amp envelope controls <b>volume over time</b>. Pick an instrument shape, then press PLAY.</p>
+
+        <div class="instrumentGrid">
+          <button class="inst selected" data-preset="piano"><b>🎹 Piano</b><span>Fast attack, natural decay</span></button>
+          <button class="inst" data-preset="pluck"><b>🪕 Pluck</b><span>Very fast, short sound</span></button>
+          <button class="inst" data-preset="organ"><b>🎛 Organ</b><span>Instant + sustained</span></button>
+          <button class="inst" data-preset="pad"><b>☁️ Pad</b><span>Slow attack + release</span></button>
+        </div>
+
+        <div class="controls">
+          <div class="ctrl"><label>Attack <span id="aVal"></span></label><input id="attack" type="range" min="0.01" max="2.5" step="0.01"></div>
+          <div class="ctrl"><label>Decay <span id="dVal"></span></label><input id="decay" type="range" min="0.01" max="2.5" step="0.01"></div>
+          <div class="ctrl"><label>Sustain <span id="sVal"></span></label><input id="sustain" type="range" min="0" max="1" step="0.01"></div>
+          <div class="ctrl"><label>Release <span id="rVal"></span></label><input id="release" type="range" min="0.01" max="3" step="0.01"></div>
+        </div>
+
+        <div class="transport">
+          <button class="play" id="playAmp">▶ PLAY</button>
+          <button class="stop" id="stopAmp">■ STOP</button>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="hint">Current amp level</div>
+            <strong id="ampPct">0%</strong>
+          </div>
+          <div class="badge" id="ampStage">IDLE</div>
+        </div>
+        <div class="meter"><div id="ampMeter"></div></div>
+      </div>
+
+      <div class="card canvasWrap">
+        <div style="width:100%">
+          <canvas id="ampCanvas" width="900" height="390"></canvas>
+          <div class="legend">
+            <span><i class="dot" style="background:#8ce99a"></i>Envelope shape</span>
+            <span><i class="dot" style="background:#fff"></i>Sound's current position</span>
+          </div>
+          <div class="explain">
+            <div class="phase"><b>A — Attack</b><span>How long volume takes to rise from silence.</span></div>
+            <div class="phase"><b>D — Decay</b><span>How long it falls from the peak to sustain.</span></div>
+            <div class="phase"><b>S — Sustain</b><span>The level held while the note is held.</span></div>
+            <div class="phase"><b>R — Release</b><span>How long it fades after the note is released.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="filterPanel" class="tabPanel">
+    <div class="grid">
+      <div class="card">
+        <h2>Filter Envelope</h2>
+        <p class="hint">The filter envelope does <b>not</b> directly control volume. It moves the filter cutoff over time, changing how bright or dark the sound is.</p>
+
+        <div class="filterPresets">
+          <button class="fPreset selected" data-fpreset="pluck">Pluck</button>
+          <button class="fPreset" data-fpreset="sweep">Sweep</button>
+          <button class="fPreset" data-fpreset="reverse">Reverse</button>
+        </div>
+
+        <div class="controls">
+          <div class="ctrl"><label>Attack <span id="faVal"></span></label><input id="fAttack" type="range" min="0.01" max="2.5" step="0.01"></div>
+          <div class="ctrl"><label>Decay <span id="fdVal"></span></label><input id="fDecay" type="range" min="0.01" max="2.5" step="0.01"></div>
+          <div class="ctrl"><label>Sustain <span id="fsVal"></span></label><input id="fSustain" type="range" min="0" max="1" step="0.01"></div>
+          <div class="ctrl"><label>Release <span id="frVal"></span></label><input id="fRelease" type="range" min="0.01" max="3" step="0.01"></div>
+        </div>
+
+        <div class="bigSlider ctrl">
+          <label>Envelope Amount <span id="amtVal"></span></label>
+          <input id="fAmount" type="range" min="-1" max="1" step="0.01" value="0.85">
+        </div>
+
+        <div class="transport">
+          <button class="play" id="playFilter">▶ PLAY</button>
+          <button class="stop" id="stopFilter">■ STOP</button>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="hint">Current cutoff</div>
+            <strong id="cutoffReadout">300 Hz</strong>
+          </div>
+          <div class="badge" id="filterStage">IDLE</div>
+        </div>
+        <div class="meter"><div id="filterMeter"></div></div>
+      </div>
+
+      <div class="card canvasWrap">
+        <div style="width:100%">
+          <canvas id="filterCanvas" width="900" height="390"></canvas>
+          <div class="legend">
+            <span><i class="dot" style="background:#ffd166"></i>Filter envelope</span>
+            <span><i class="dot" style="background:#fff"></i>Current cutoff position</span>
+          </div>
+          <div class="explain">
+            <div class="phase"><b>Low cutoff</b><span>Fewer highs pass through → darker/muffled.</span></div>
+            <div class="phase"><b>High cutoff</b><span>More highs pass through → brighter/open.</span></div>
+            <div class="phase"><b>Positive amount</b><span>Envelope opens the filter upward.</span></div>
+            <div class="phase"><b>Negative amount</b><span>Envelope moves the cutoff downward.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footerNote">Tip for class: ask students to describe what changed before showing them the ADSR labels.</div>
+</div>
+
+<script>
+let ctx, currentNodes = [], raf = null;
+
+const ampPresets = {
+  piano: {a:.015,d:1.15,s:.22,r:.7, hold:1.0, type:"piano"},
+  pluck: {a:.008,d:.32,s:.05,r:.25, hold:.35, type:"pluck"},
+  organ: {a:.015,d:.08,s:.92,r:.18, hold:1.3, type:"organ"},
+  pad:   {a:1.1,d:.7,s:.72,r:1.7, hold:1.7, type:"pad"}
+};
+const filterPresets = {
+  pluck: {a:.01,d:.55,s:.10,r:.35, amt:.9},
+  sweep: {a:1.25,d:.55,s:.62,r:.9, amt:.95},
+  reverse:{a:.85,d:.5,s:.25,r:.8, amt:-.85}
+};
+let ampPresetName="piano", filterPresetName="pluck";
+
+function audio(){
+  if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)();
+  return ctx;
+}
+function stopAll(){
+  currentNodes.forEach(n=>{try{n.stop?.()}catch(e){} try{n.disconnect?.()}catch(e){}});
+  currentNodes=[];
+  if(raf) cancelAnimationFrame(raf);
+  raf=null;
+}
+function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
+function fmtTime(v){ return v<1 ? Math.round(v*1000)+" ms" : v.toFixed(2)+" s"; }
+
+function setupTabs(){
+  ampTab.onclick=()=>{ampTab.classList.add("active");filterTab.classList.remove("active");ampPanel.classList.add("active");filterPanel.classList.remove("active");stopAll();}
+  filterTab.onclick=()=>{filterTab.classList.add("active");ampTab.classList.remove("active");filterPanel.classList.add("active");ampPanel.classList.remove("active");stopAll();}
+}
+
+function setAmpPreset(name){
+  ampPresetName=name; const p=ampPresets[name];
+  attack.value=p.a; decay.value=p.d; sustain.value=p.s; release.value=p.r;
+  document.querySelectorAll(".inst").forEach(b=>b.classList.toggle("selected",b.dataset.preset===name));
+  updateAmpLabels(); drawAmp();
+}
+function setFilterPreset(name){
+  filterPresetName=name; const p=filterPresets[name];
+  fAttack.value=p.a; fDecay.value=p.d; fSustain.value=p.s; fRelease.value=p.r; fAmount.value=p.amt;
+  document.querySelectorAll(".fPreset").forEach(b=>b.classList.toggle("selected",b.dataset.fpreset===name));
+  updateFilterLabels(); drawFilter();
+}
+
+function updateAmpLabels(){
+  aVal.textContent=fmtTime(+attack.value); dVal.textContent=fmtTime(+decay.value);
+  sVal.textContent=Math.round(+sustain.value*100)+"%"; rVal.textContent=fmtTime(+release.value);
+}
+function updateFilterLabels(){
+  faVal.textContent=fmtTime(+fAttack.value); fdVal.textContent=fmtTime(+fDecay.value);
+  fsVal.textContent=Math.round(+fSustain.value*100)+"%"; frVal.textContent=fmtTime(+fRelease.value);
+  amtVal.textContent=(+fAmount.value>=0?"+":"")+Math.round(+fAmount.value*100)+"%";
+}
+
+function envAt(t,a,d,s,hold,r){
+  const t1=a, t2=a+d, t3=a+d+hold, t4=t3+r;
+  if(t<0) return {v:0,stage:"IDLE"};
+  if(t<t1) return {v:t/a,stage:"ATTACK"};
+  if(t<t2) return {v:1-(1-s)*((t-t1)/d),stage:"DECAY"};
+  if(t<t3) return {v:s,stage:"SUSTAIN"};
+  if(t<t4) return {v:s*(1-(t-t3)/r),stage:"RELEASE"};
+  return {v:0,stage:"DONE"};
+}
+
+function drawEnvelope(canvas, vals, color, marker=null, labelMode="amp"){
+  const c=canvas.getContext("2d"), W=canvas.width, H=canvas.height, pad=52;
+  c.clearRect(0,0,W,H);
+  const {a,d,s,hold,r}=vals, total=a+d+hold+r;
+  const X=t=>pad+(W-pad*2)*(t/total), Y=v=>H-pad-(H-pad*2)*v;
+
+  c.strokeStyle="rgba(255,255,255,.15)"; c.lineWidth=2;
+  c.beginPath(); c.moveTo(pad,H-pad); c.lineTo(W-pad,H-pad); c.stroke();
+  c.beginPath(); c.moveTo(pad,pad); c.lineTo(pad,H-pad); c.stroke();
+
+  const pts=[[0,0],[a,1],[a+d,s],[a+d+hold,s],[total,0]];
+  c.strokeStyle=color; c.lineWidth=5; c.lineJoin="round";
+  c.beginPath(); pts.forEach((p,i)=>i?c.lineTo(X(p[0]),Y(p[1])):c.moveTo(X(p[0]),Y(p[1]))); c.stroke();
+
+  c.fillStyle="rgba(255,255,255,.72)"; c.font="bold 15px system-ui";
+  [["A",a/2],["D",a+d/2],["S",a+d+hold/2],["R",a+d+hold+r/2]].forEach(([txt,t])=>c.fillText(txt,X(t)-5,H-20));
+
+  if(marker){
+    const x=X(clamp(marker.t,0,total)), y=Y(clamp(marker.v,0,1));
+    c.fillStyle="#fff"; c.beginPath(); c.arc(x,y,9,0,Math.PI*2); c.fill();
+    c.strokeStyle=color; c.lineWidth=4; c.stroke();
+  }
+
+  c.fillStyle="rgba(255,255,255,.6)"; c.font="13px system-ui";
+  c.save(); c.translate(18,H/2+35); c.rotate(-Math.PI/2);
+  c.fillText(labelMode==="amp"?"LEVEL":"FILTER MOVEMENT",0,0); c.restore();
+}
+
+function drawAmp(marker=null){
+  drawEnvelope(ampCanvas,{
+    a:+attack.value,d:+decay.value,s:+sustain.value,hold:ampPresets[ampPresetName].hold,r:+release.value
+  },"#8ce99a",marker,"amp");
+}
+function drawFilter(marker=null){
+  drawEnvelope(filterCanvas,{
+    a:+fAttack.value,d:+fDecay.value,s:+fSustain.value,hold:1.2,r:+fRelease.value
+  },"#ffd166",marker,"filter");
+}
+
+function makeInstrument(type, destination, now, duration){
+  const ac=audio();
+  if(type==="organ"){
+    [110,220,330,440].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type=i===0?"sine":"triangle"; o.frequency.value=f; g.gain.value=[.42,.2,.11,.07][i];
+      o.connect(g).connect(destination); o.start(now); o.stop(now+duration+.2); currentNodes.push(o,g);
+    });
+  } else if(type==="pad"){
+    [108.8,110,111.2].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type="sawtooth"; o.frequency.value=f; g.gain.value=.11;
+      o.connect(g).connect(destination); o.start(now); o.stop(now+duration+.2); currentNodes.push(o,g);
+    });
+  } else if(type==="pluck"){
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type="triangle"; o.frequency.setValueAtTime(220,now);
+    o.frequency.exponentialRampToValueAtTime(110,now+.08);
+    g.gain.value=.65; o.connect(g).connect(destination); o.start(now); o.stop(now+duration+.2); currentNodes.push(o,g);
+    const noise=ac.createBufferSource(), ng=ac.createGain();
+    const buf=ac.createBuffer(1,ac.sampleRate*.08,ac.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+    noise.buffer=buf; ng.gain.value=.22; noise.connect(ng).connect(destination); noise.start(now); currentNodes.push(noise,ng);
+  } else {
+    [220,440,660].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type="sine"; o.frequency.value=f; g.gain.value=[.55,.16,.07][i];
+      o.connect(g).connect(destination); o.start(now); o.stop(now+duration+.2); currentNodes.push(o,g);
+    });
+  }
+}
+
+async function playAmpSound(){
+  stopAll(); const ac=audio(); await ac.resume();
+  const a=+attack.value,d=+decay.value,s=+sustain.value,r=+release.value,hold=ampPresets[ampPresetName].hold;
+  const total=a+d+hold+r, now=ac.currentTime+.03;
+  const amp=ac.createGain(); amp.gain.setValueAtTime(.0001,now);
+  amp.gain.linearRampToValueAtTime(1,now+a);
+  amp.gain.linearRampToValueAtTime(Math.max(.0001,s),now+a+d);
+  amp.gain.setValueAtTime(Math.max(.0001,s),now+a+d+hold);
+  amp.gain.linearRampToValueAtTime(.0001,now+total);
+  amp.connect(ac.destination); currentNodes.push(amp);
+  makeInstrument(ampPresets[ampPresetName].type,amp,now,total);
+  const start=performance.now()+30;
+  function frame(ts){
+    const t=(ts-start)/1000, e=envAt(t,a,d,s,hold,r);
+    ampPct.textContent=Math.round(e.v*100)+"%"; ampStage.textContent=e.stage;
+    ampMeter.style.width=(e.v*100)+"%"; drawAmp({t:Math.max(0,t),v:e.v});
+    if(t<total+.08) raf=requestAnimationFrame(frame); else {ampStage.textContent="IDLE"; drawAmp(); ampMeter.style.width="0%";}
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+async function playFilterSound(){
+  stopAll(); const ac=audio(); await ac.resume();
+  const a=+fAttack.value,d=+fDecay.value,s=+fSustain.value,r=+fRelease.value,hold=1.2,amt=+fAmount.value,total=a+d+hold+r;
+  const now=ac.currentTime+.03;
+  const osc=ac.createOscillator(), osc2=ac.createOscillator(), mix=ac.createGain(), filt=ac.createBiquadFilter(), out=ac.createGain();
+  osc.type="sawtooth"; osc.frequency.value=110;
+  osc2.type="square"; osc2.frequency.value=55;
+  mix.gain.value=.18; out.gain.value=.45;
+  filt.type="lowpass"; filt.Q.value=7;
+
+  const base=amt>=0?180:6500, end=amt>=0?Math.max(300,base+amt*8000):Math.max(120,base+amt*6200);
+  const peak=amt>=0?Math.min(9000,base+Math.abs(amt)*8200):Math.max(120,base-Math.abs(amt)*6200);
+  const sus=base+(peak-base)*s;
+  filt.frequency.setValueAtTime(base,now);
+  filt.frequency.linearRampToValueAtTime(peak,now+a);
+  filt.frequency.linearRampToValueAtTime(sus,now+a+d);
+  filt.frequency.setValueAtTime(sus,now+a+d+hold);
+  filt.frequency.linearRampToValueAtTime(base,now+total);
+
+  osc.connect(mix); osc2.connect(mix); mix.connect(filt).connect(out).connect(ac.destination);
+  osc.start(now); osc2.start(now); osc.stop(now+total+.2); osc2.stop(now+total+.2);
+  currentNodes.push(osc,osc2,mix,filt,out);
+
+  const start=performance.now()+30;
+  function cutoffFor(v){ return clamp(base+(peak-base)*v,80,10000); }
+  function frame(ts){
+    const t=(ts-start)/1000, e=envAt(t,a,d,s,hold,r), hz=cutoffFor(e.v);
+    cutoffReadout.textContent=Math.round(hz)+" Hz"; filterStage.textContent=e.stage;
+    const norm=(Math.log(hz)-Math.log(80))/(Math.log(10000)-Math.log(80));
+    filterMeter.style.width=(clamp(norm,0,1)*100)+"%";
+    drawFilter({t:Math.max(0,t),v:e.v});
+    if(t<total+.08) raf=requestAnimationFrame(frame); else {filterStage.textContent="IDLE";drawFilter();filterMeter.style.width="0%";}
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+document.querySelectorAll(".inst").forEach(b=>b.onclick=()=>setAmpPreset(b.dataset.preset));
+document.querySelectorAll(".fPreset").forEach(b=>b.onclick=()=>setFilterPreset(b.dataset.fpreset));
+[attack,decay,sustain,release].forEach(x=>x.oninput=()=>{updateAmpLabels();drawAmp()});
+[fAttack,fDecay,fSustain,fRelease,fAmount].forEach(x=>x.oninput=()=>{updateFilterLabels();drawFilter()});
+playAmp.onclick=playAmpSound; stopAmp.onclick=()=>{stopAll();ampStage.textContent="IDLE";ampPct.textContent="0%";ampMeter.style.width="0%";drawAmp()};
+playFilter.onclick=playFilterSound; stopFilter.onclick=()=>{stopAll();filterStage.textContent="IDLE";filterMeter.style.width="0%";drawFilter()};
+setupTabs(); setAmpPreset("piano"); setFilterPreset("pluck");
+</script>
+</body>
+</html>
